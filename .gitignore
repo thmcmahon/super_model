@@ -2,4 +2,6 @@
 .Rhistory
 .RData
 .Ruserdata
-.csv
+*.csv
+*.Rds
+data_raw/superv4.xlsx
