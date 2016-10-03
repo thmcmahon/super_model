@@ -3,8 +3,8 @@ library(dplyr)
 tax <- ozTaxData::sample_13_14
 
 initial_state <- function(wages, lf_status) {
-  
-  # check for integer
+  # assigns an initial state string to a taxpayer based on their salary and
+  # labour force status
   if (wages %% 1 != 0) {
     stop("Wages must be an integer")
   }
@@ -26,7 +26,7 @@ initial_state <- function(wages, lf_status) {
   } else if (wages == 0) {
     string <- paste(string, "Nil_income", sep = "")
   } else if (wages >= 1 && wages <= 149) {
-    string <- paste(string, "1_149", sep = "")
+    string <- paste(string, "1-149", sep = "")
   } else if (wages >= 150 && wages <= 249) {
     string <- paste(string, "150-249", sep = "")
   } else if (wages >= 250 && wages <= 399) {
@@ -42,7 +42,7 @@ initial_state <- function(wages, lf_status) {
   } else if (wages >= 1300 && wages <= 1599) {
     string <- paste(string, "1300-1599", sep = "")
   } else if (wages >= 1600 && wages <= 1999) {
-    string <- paste(string, "1600_1999", sep = "")
+    string <- paste(string, "1600-1999", sep = "")
   } else if (wages >= 2000) {
     string <- paste(string, "2000_or_more", sep = "")
   }
@@ -72,14 +72,30 @@ convert_age_ranges <- function(age_range) {
 
 prep_data <- function(tax_data) {
   tax$age_range_census <- sapply(tax$age_range, convert_age_ranges)
-  tax %>%
+  tax <- tax %>%
     select(id = Ind, gender = Gender, age = age_range_census,
            wages = Sw_amt, transfers = Aust_govt_pnsn_allw_amt,
-           other_inc = Tot_inc_amt - Sw_amt - Aust_govt_pnsn_allw_amt) %>%
+           other_inc = Tot_inc_amt - Sw_amt - Aust_govt_pnsn_allw_amt,
+           super_balance = MCS_Ttl_Acnt_Bal) %>%
     mutate(wages = round(wages / 52, 0), transfers = round(transfers / 52,0),
            other_inc = round(other_inc / 52,0))
+  # This needs to be fixed to add some kind of dynamic labour force
+  # probabilities.
+  tax$lf_status <- sample(c('employed', 'unemployed', 'nilf'),
+                          size = nrow(tax), prob = c(64.7, 5.6, 29.7),
+                          replace = TRUE)
+  tax$state <- mapply(initial_state, tax$wages, tax$lf_status)
+  tax
 }
 
-
-# TO DO - Classify each person into one of the appropriate buckets
+# This is on the way but doesn't quite work it's creating a huge vector
+add_mc_states <- function(tax) {
+  mc <- readRDS('data/mc_men_women_total.Rds')
+  container_list <- list()
+  for (i in 1:nrow(tax)) {
+    container_list[[i]] <- rmarkovchain(n = 5, mc$men)
+  }
+  state_df <- do.call(rbind, container_list)
+  cbind(tax, state_df)
+}
 
