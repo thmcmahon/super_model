@@ -1,57 +1,10 @@
 library(dplyr)
+library(markovchain)
 
 tax <- ozTaxData::sample_13_14
-
-initial_state <- function(wages, lf_status) {
-  # assigns an initial state string to a taxpayer based on their salary and
-  # labour force status
-  if (wages %% 1 != 0) {
-    stop("Wages must be an integer")
-  }
-  
-  string = ""
-  
-  if (lf_status == "employed") {
-    string <- paste("e_", string, sep = "")
-  } else if (lf_status == "unemployed") {
-    string <- paste("u_", string, sep = "")
-  } else if (lf_status == "nilf") {
-    string <- paste("nilf_", string, sep = "")
-  } else {
-    stop("lf_status must be either 'employed', 'unemployed' or 'nilf'")
-  }
-  
-  if (wages < 0) {
-    string <- paste(string, "Negative_income", sep = "")
-  } else if (wages == 0) {
-    string <- paste(string, "Nil_income", sep = "")
-  } else if (wages >= 1 && wages <= 149) {
-    string <- paste(string, "1-149", sep = "")
-  } else if (wages >= 150 && wages <= 249) {
-    string <- paste(string, "150-249", sep = "")
-  } else if (wages >= 250 && wages <= 399) {
-    string <- paste(string, "250-399", sep = "")
-  } else if (wages >= 400 && wages <= 599) {
-    string <- paste(string, "400-499", sep = "")
-  } else if (wages >= 600 && wages <= 799) {
-    string <- paste(string, "600-799", sep = "")
-  } else if (wages >= 800 && wages <= 999) {
-    string <- paste(string, "800-999", sep = "")
-  } else if (wages >= 1000 && wages <= 1299) {
-    string <- paste(string, "1000-1299", sep = "")
-  } else if (wages >= 1300 && wages <= 1599) {
-    string <- paste(string, "1300-1599", sep = "")
-  } else if (wages >= 1600 && wages <= 1999) {
-    string <- paste(string, "1600-1999", sep = "")
-  } else if (wages >= 2000) {
-    string <- paste(string, "2000_or_more", sep = "")
-  }
-  
-  string
-}
+mc_list <- readRDS('data/mc_list.Rds')
 
 convert_age_ranges <- function(age_range) {
-  warning("Needs to be fixed to add a probabilistic age split for old people")
   if (age_range == "under 20" | age_range == "20 to 24") {
     output <- '15-24'
   } else if (age_range == "25 to 29" | age_range == "30 to 34") {
@@ -77,25 +30,107 @@ prep_data <- function(tax_data) {
            wages = Sw_amt, transfers = Aust_govt_pnsn_allw_amt,
            other_inc = Tot_inc_amt - Sw_amt - Aust_govt_pnsn_allw_amt,
            super_balance = MCS_Ttl_Acnt_Bal) %>%
+    filter(age != '65-74') %>%
     mutate(wages = round(wages / 52, 0), transfers = round(transfers / 52,0),
            other_inc = round(other_inc / 52,0))
-  # This needs to be fixed to add some kind of dynamic labour force
-  # probabilities.
-  tax$lf_status <- sample(c('employed', 'unemployed', 'nilf'),
-                          size = nrow(tax), prob = c(64.7, 5.6, 29.7),
-                          replace = TRUE)
-  tax$state <- mapply(initial_state, tax$wages, tax$lf_status)
   tax
 }
 
-# This is on the way but doesn't quite work it's creating a huge vector
-add_mc_states <- function(tax) {
-  mc <- readRDS('data/mc_men_women_total.Rds')
-  container_list <- list()
-  for (i in 1:nrow(tax)) {
-    container_list[[i]] <- rmarkovchain(n = 5, mc$men)
+build_chain <- function(age_range, gender) {
+  # Build a markov chain in 5 year increments from a starting age
+  # age_range should be of the form "min-max" eg "55-64"
+  age_range <- unlist(strsplit(age_range, "-"))
+  min_age <- age_range[1]
+  max_age <- age_range[2]
+  age <- sample(min_age:max_age, 1)
+  # initialise the markov chain
+  if (gender == "Female") {
+    if (age >= 15 & age <= 24) {
+      t0 <- rmarkovchain(1, mc_list$`Female_15-24`)
+    } else if (age >= 25 & age <= 34) {
+      t0 <- rmarkovchain(1, mc_list$`Female_25-34`)
+    } else if (age >= 35 & age <= 44) {
+      t0 <- rmarkovchain(1, mc_list$`Female_35-44`)
+    } else if (age >= 45 & age <= 54) {
+      t0 <- rmarkovchain(1, mc_list$`Female_45-54`)
+    } else if (age >= 55 & age <= 64) {
+      t0 <- rmarkovchain(1, mc_list$`Female_55-64`)
+    } else {
+      stop('Age range out of bounds')
+    }
+  } else if (gender == "Male") {
+    if (age >= 15 & age <= 24) {
+      t0 <- rmarkovchain(1, mc_list$`Male_15-24`)
+    } else if (age >= 25 & age <= 34) {
+      t0 <- rmarkovchain(1, mc_list$`Male_25-34`)
+    } else if (age >= 35 & age <= 44) {
+      t0 <- rmarkovchain(1, mc_list$`Male_35-44`)
+    } else if (age >= 45 & age <= 54) {
+      t0 <- rmarkovchain(1, mc_list$`Male_45-54`)
+    } else if (age >= 55 & age <= 64) {
+      t0 <- rmarkovchain(1, mc_list$`Male_55-64`)
+    } else {
+      stop('Age range out of bounds')
+    }
+  } else {
+    stop('Gender must be either Male or Female')
   }
-  state_df <- do.call(rbind, container_list)
-  cbind(tax, state_df)
+  chain <- t0
+  while (age < 65) {
+    age <- age + 5
+    
+    if (gender == "Female") {
+      if (age >= 15 & age <= 24) {
+        chain <- c(chain, rmarkovchain(1, mc_list$`Female_15-24`),
+                   t0 = chain[length(chain)])
+      } else if (age >= 25 & age <= 34) {
+        chain <- c(chain, rmarkovchain(1, mc_list$`Female_25-34`),
+                   t0 = chain[length(chain)])
+      } else if (age >= 35 & age <= 44) {
+        chain <- c(chain, rmarkovchain(1, mc_list$`Female_35-44`),
+                   t0 = chain[length(chain)])
+      } else if (age >= 45 & age <= 54) {
+        chain <- c(chain, rmarkovchain(1, mc_list$`Female_45-54`),
+                   t0 = chain[length(chain)])
+      } else if (age >= 55 & age <= 64) {
+        chain <- c(chain, rmarkovchain(1, mc_list$`Female_55-64`),
+                   t0 = chain[length(chain)])
+      }
+    } else if (gender == "Male") {
+      if (age >= 15 & age <= 24) {
+        chain <- c(chain, rmarkovchain(1, mc_list$`Female_15-24`),
+                   t0 = chain[length(chain)])
+      } else if (age >= 25 & age <= 34) {
+        chain <- c(chain, rmarkovchain(1, mc_list$`Female_25-34`),
+                   t0 = chain[length(chain)])
+      } else if (age >= 35 & age <= 44) {
+        chain <- c(chain, rmarkovchain(1, mc_list$`Female_35-44`),
+                   t0 = chain[length(chain)])
+      } else if (age >= 45 & age <= 54) {
+        chain <- c(chain, rmarkovchain(1, mc_list$`Female_45-54`),
+                   t0 = chain[length(chain)])
+      } else if (age >= 55 & age <= 64) {
+        chain <- c(chain, rmarkovchain(1, mc_list$`Female_55-64`),
+                   t0 = chain[length(chain)])
+      } 
+    }
+  }
+  unname(chain)
 }
+
+tax <- prep_data(tax)
+
+future_states <- mapply(build_chain, tax$age, tax$gender)
+
+fs_df <- ldply(future_states, rbind)
+
+
+merged <- cbind(tax, fs_df)
+
+names(merged) <- c("id", "gender", "age", "wages", "transfers", "other_inc",
+                  "super_balance", "id", "2013", "2018", "2023", "2028", "2033",
+                  "2038", "2043", "2048", "2053", "2058", "2063", "2068",
+                  "2073", "2078", "2083", "2088", "2093", "2098", "2103")
+
+
 
