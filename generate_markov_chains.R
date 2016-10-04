@@ -32,13 +32,3 @@ trans_probs <- lapply(mat_list, prop.table, margin = 1)
 mc_list <- lapply(trans_probs, function(x) new("markovchain", transitionMatrix = x))
 
 saveRDS(mc_list, file = "data/mc_list.Rds")
-
-# mc_list <- lapply(trans_probs, function(x) new("markovchain",
-#                                                transitionMatrix = x))
-
-# men <- new("markovchain", transitionMatrix = trans_probs[['Male_Total']])
-# women <- new("markovchain", transitionMatrix = trans_probs[['Female_Total']])
-
-# mcs <- list("men" = men, "women" = women)
-
-# saveRDS(mcs, file = "data/mc_men_women_total.Rds")
