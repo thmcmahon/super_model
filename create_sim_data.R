@@ -7,25 +7,6 @@ mc_list <- readRDS('data/mc_list.Rds')
 
 # Helper functions --------------------
 
-convert_age_ranges <- function(age_range) {
-  if (age_range == "under 20" | age_range == "20 to 24") {
-    output <- '15-24'
-  } else if (age_range == "25 to 29" | age_range == "30 to 34") {
-    output <- '25-34'
-  } else if (age_range == "35 to 39" | age_range == "40 to 44") {
-    output <- '35-44'
-  } else if (age_range == "45 to 49" | age_range == "50 to 54") {
-    output <- '45-54' 
-  } else if (age_range == "55 to 59" | age_range == "60 to 64") {
-    output <- '55-64'
-  } else if (age_range == "65 to 69" | age_range == "70 and over") {
-    output <- '65-74'
-  } else {
-    stop("age_range does not match one of the ATO age ranges")
-  }
-  output
-}
-
 range_to_value <- function(range, delimiter) {
   # Randomly choose a value between a text range split by a delimiter
   rng <- unlist(strsplit(range, split = delimiter))
@@ -34,99 +15,6 @@ range_to_value <- function(range, delimiter) {
   x <- sample(min:max, 1)
   x
 }
-
-prep_data <- function(tax_data) {
-  tax$age_range_census <- sapply(tax$age_range, convert_age_ranges)
-  tax <- tax %>%
-    select(ind = Ind, gender = Gender, age = age_range_census,
-           super_balance = MCS_Ttl_Acnt_Bal) %>%
-    filter(age != '65-74')
-  tax
-}
-
-build_chain <- function(age_range, gender) {
-  # Build a markov chain in 5 year increments from a starting age
-  # age_range should be of the form "min-max" eg "55-64"
-  # age_range <- unlist(strsplit(age_range, "-"))
-  # min_age <- age_range[1]
-  # max_age <- age_range[2]
-  # age <- sample(min_age:max_age, 1)
-  age <- range_to_value(age_range, "-")
-  # initialise the markov chain
-  if (gender == "Female") {
-    if (age >= 15 & age <= 24) {
-      t0 <- rmarkovchain(1, mc_list$`Female_15-24`)
-    } else if (age >= 25 & age <= 34) {
-      t0 <- rmarkovchain(1, mc_list$`Female_25-34`)
-    } else if (age >= 35 & age <= 44) {
-      t0 <- rmarkovchain(1, mc_list$`Female_35-44`)
-    } else if (age >= 45 & age <= 54) {
-      t0 <- rmarkovchain(1, mc_list$`Female_45-54`)
-    } else if (age >= 55 & age <= 64) {
-      t0 <- rmarkovchain(1, mc_list$`Female_55-64`)
-    } else {
-      stop('Age range out of bounds')
-    }
-  } else if (gender == "Male") {
-    if (age >= 15 & age <= 24) {
-      t0 <- rmarkovchain(1, mc_list$`Male_15-24`)
-    } else if (age >= 25 & age <= 34) {
-      t0 <- rmarkovchain(1, mc_list$`Male_25-34`)
-    } else if (age >= 35 & age <= 44) {
-      t0 <- rmarkovchain(1, mc_list$`Male_35-44`)
-    } else if (age >= 45 & age <= 54) {
-      t0 <- rmarkovchain(1, mc_list$`Male_45-54`)
-    } else if (age >= 55 & age <= 64) {
-      t0 <- rmarkovchain(1, mc_list$`Male_55-64`)
-    } else {
-      stop('Age range out of bounds')
-    }
-  } else {
-    stop('Gender must be either Male or Female')
-  }
-  chain <- t0
-  while (age < 65) {
-    age <- age + 5
-    
-    if (gender == "Female") {
-      if (age >= 15 & age <= 24) {
-        chain <- c(chain, rmarkovchain(1, mc_list$`Female_15-24`),
-                   t0 = chain[length(chain)])
-      } else if (age >= 25 & age <= 34) {
-        chain <- c(chain, rmarkovchain(1, mc_list$`Female_25-34`),
-                   t0 = chain[length(chain)])
-      } else if (age >= 35 & age <= 44) {
-        chain <- c(chain, rmarkovchain(1, mc_list$`Female_35-44`),
-                   t0 = chain[length(chain)])
-      } else if (age >= 45 & age <= 54) {
-        chain <- c(chain, rmarkovchain(1, mc_list$`Female_45-54`),
-                   t0 = chain[length(chain)])
-      } else if (age >= 55 & age <= 64) {
-        chain <- c(chain, rmarkovchain(1, mc_list$`Female_55-64`),
-                   t0 = chain[length(chain)])
-      }
-    } else if (gender == "Male") {
-      if (age >= 15 & age <= 24) {
-        chain <- c(chain, rmarkovchain(1, mc_list$`Female_15-24`),
-                   t0 = chain[length(chain)])
-      } else if (age >= 25 & age <= 34) {
-        chain <- c(chain, rmarkovchain(1, mc_list$`Female_25-34`),
-                   t0 = chain[length(chain)])
-      } else if (age >= 35 & age <= 44) {
-        chain <- c(chain, rmarkovchain(1, mc_list$`Female_35-44`),
-                   t0 = chain[length(chain)])
-      } else if (age >= 45 & age <= 54) {
-        chain <- c(chain, rmarkovchain(1, mc_list$`Female_45-54`),
-                   t0 = chain[length(chain)])
-      } else if (age >= 55 & age <= 64) {
-        chain <- c(chain, rmarkovchain(1, mc_list$`Female_55-64`),
-                   t0 = chain[length(chain)])
-      } 
-    }
-  }
-  unname(chain)
-}
-
 
 
 range_to_income <- function(income_range) {
@@ -145,8 +33,13 @@ range_to_income <- function(income_range) {
 }
 
 
-gender_income_to_range <- function(gender, income) {
-  # Convert a gender and income to a range to lookup markov chain
+range_to_age <- function(age_range) {
+  range_to_value(age_range, " to ")
+}
+
+
+gender_age_to_range <- function(gender, age) {
+  # Convert a gender and age to a range to lookup markov chain
   rnges <- tribble(
     ~rnge, ~min, ~max,
     "15-24", 15, 24,
@@ -155,44 +48,89 @@ gender_income_to_range <- function(gender, income) {
     "45-54", 45, 54,
     "55-64", 55, 64
   )
-  rng <- as.character(rnges[rnges$min < income & rnges$max > income,1])
+  rng <- as.character(rnges[rnges$min <= age & rnges$max >= age,1])
   paste(gender, rng, sep = "_")
 }
 
 
-forecast_income <- function(age_range, gender) {
-  chain <- build_chain(age_range, gender)
-  unname(sapply(chain, range_to_income) * 50)
+income_to_range <- function(income) {
+  # Convert an income to the ranges in the markov chain
+  rnges <- tribble(
+    ~rng, ~min, ~max,
+    "Negative_income", -Inf, -1,
+    "Nil_income", 0, 0,
+    "1-149", 1, 149,
+    "150-249", 150, 249,
+    "250-399", 250, 399,
+    "400-599", 400, 599,
+    "600-799", 600, 799,
+    "800-999", 800, 999,
+    "1000-1299", 1000, 1299,
+    "1300-1599", 1300, 1599,
+    "1600-1999", 1600, 1999,
+    "2000_or_more", 2000, Inf
+  )
+  rng <- as.character(rnges[rnges$min <= income & rnges$max >= income,1])
+  rng
 }
 
-# Analysis -----------------
+# Prep data and build chains ---------------------------------------------------
 
-tax <- prep_data(tax)
-
-future_states <- mapply(forecast_income, tax$age, tax$gender)
-
-fs_df <- plyr::ldply(future_states, rbind)
-
-
-merged <- cbind(tax, fs_df)
-
-names(merged) <- c("ind","gender", "age", "super_balance", "id", "2013", "2018", "2023", "2028",
-                   "2033", "2038", "2043", "2048", "2053", "2058", "2063", 
-                   "2068", "2073", "2078", "2083", "2088", "2093", "2098",
-                   "2103")
-
-
-# A small simulation
-
-microsim <- function(n, mc, mc_len) {
-  set.seed(1)
-  output_df <- data.frame()
-  for (i in 1:n) {
-    chain <- rmarkovchain(n = mc_len, object = mc_list[[mc]])
-    output_df <- rbind(output_df, sapply(chain, range_to_income))
+build_chain <- function(age, gender, income) {
+  chain <- vector()
+  # first age the person by five years so we don't get an extra year
+  age <- age + 5
+  while (age < 65) {
+    # For the first chain set t0 to be current income
+    if (length(chain) == 0) {
+      t0 <- income_to_range(income)
+    } else {
+      # For the second chain set t0 to be last income
+      t0 <- chain[length(chain)]
+    }
+    chain <- c(chain,
+               rmarkovchain(
+                 n = 1,
+                 object = mc_list[[gender_age_to_range(gender, age)]],
+                 t0 = t0
+               )
+    )
+    age <- age + 5
   }
-  names(output_df) <- sapply(seq(1:mc_len),
-                                 function(x) paste('t', x, sep = "")
-                                 )
-  output_df
+  if (length(chain) < 1) return(chain)
+  # sapply introduces some ugly names
+  unname(sapply(chain, range_to_income))
 }
+
+
+prep_data <- function(tax_data) {
+  # Prepare the ATO tax sample to be the base file for analysis
+  tax$age_range <- as.character(tax$age_range)
+  tax$age_range[tax$age_range == "under 20"] <- "15 to 19"
+  too_old <- c("65 to 69", "70 and over")
+  tax <- tax[!tax$age_range %in% too_old,]
+  tax$imputed_age <- sapply(tax$age_range, range_to_age)
+  
+  tax <- tax %>%
+    select(ind = Ind, gender = Gender, wages = Sw_amt,
+           super_balance = MCS_Ttl_Acnt_Bal, age_range, imputed_age) %>%
+    mutate(weekly_wage = as.integer(wages / 52))
+  tax
+}
+
+
+create_final_dataset <- function(tax) {
+  tax <- prep_data(tax)
+  future_states <- mapply(
+    build_chain, tax$imputed_age, tax$gender, tax$weekly_wage
+  )
+  fs_df <- plyr::ldply(future_states, rbind)
+  merged <- cbind(tax, fs_df)
+  names(merged) <- c("ind", "gender", "wages", "super_balance", "age_range",
+                     "imputed_age", "w2013", "w2018", "w2023", "w2028",
+                     "w2033", "w2038", "w2043", "w2048", "w2053", "w2058")
+  merged
+}
+
+sim_data <- create_final_dataset(tax)
+

@@ -19,6 +19,8 @@ df$income_2006 <- gsub("\\$", "", df$income_2006)
 df$income_2006 <- gsub("\\,", "", df$income_2006)
 df$income_2006 <- gsub(" ", "_", df$income_2006)
 
+df$age_2006 <- gsub(" years", "", df$age_2006)
+
 df_list <- split(df, f = paste(df$sex_2006, df$age_2006, sep = "_"))
 
 create_matrices <- function(x) { 
