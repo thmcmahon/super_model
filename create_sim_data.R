@@ -1,6 +1,7 @@
 library(dplyr)
 library(markovchain)
 library(tibble)
+library(zoo)
 
 tax <- ozTaxData::sample_13_14
 mc_list <- readRDS('data/mc_list.Rds')
@@ -119,6 +120,30 @@ prep_data <- function(tax_data) {
 }
 
 
+add_annual_data <- function(sim_data, ...) {
+  # Adds annual data with interpolation. Interpolation can be modified with ...
+  year_names <- sapply(seq(2013, 2058), function(x) paste("y", x, sep = ""))
+  sim_data[,year_names] <- NA
+  five_year_names <- sapply(seq(2013,2058,5),
+                            function(x) paste("y", x, sep = "")
+  )
+  five_week_names <- sapply(seq(2013,2058,5),
+                            function(x) paste("w", x, sep = "")
+  )
+  sim_data[,five_year_names] <- sim_data[,five_week_names] * 52
+  
+  # add the interpolated
+  interpolate <- function(x, ...){
+    t(round(na.approx(t(x), ...)))
+  }
+  
+  interpolated_data <- sim_data %>% select(starts_with('y')) %>% interpolate
+  sim_data[,year_names] <- interpolated_data
+  sim_data
+}
+
+
+
 create_final_dataset <- function(tax) {
   tax <- prep_data(tax)
   future_states <- mapply(
@@ -130,7 +155,9 @@ create_final_dataset <- function(tax) {
                      "imputed_age", "w2013", "w2018", "w2023", "w2028",
                      "w2033", "w2038", "w2043", "w2048", "w2053", "w2058")
   merged
+  merged <- add_annual_data(merged)
 }
 
 sim_data <- create_final_dataset(tax)
 
+saveRDS(sim_data, 'data/sim_data.Rds')
