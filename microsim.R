@@ -152,12 +152,16 @@ microsim <- function(sgc_current = .095, sgc_change,
   x
 }
 
-print.microsim <- function(microsim) {
+
+# Microsim methods -------------------------------------------------------------
+
+
+print.microsim <- function(x) {
+  cat("A superannuation microsimulation:", "\n")
   cat("\n")
-  print(microsim$rules)
-  cat("\n")
-  cat("\n")
-  cat("Data:", microsim$data)
+  cat("Current rate:", x$parameters$current[1],
+      "Simulation rate:", x$parameters$change[1], "\n", "\n")
+  cat("Model run time:", format(x$metadata$run_time, "%m/%d/%y %H:%M"))
 }
 
 
@@ -189,48 +193,23 @@ summary.microsim <- function(x) {
 }
 
 
-decile_summary <- function(x) {
-  x$data %>% 
-    select(ind, decile, var, final_balance) %>%
-    spread(var, final_balance) %>%
-    select(decile, current, change) %>%
-    mutate(difference = change - current) %>%
-    group_by(decile) %>%
-    summarise(average = mean(difference), median = median(difference))
-}
-
-decile_gender_summary <- function(x) {
+super_summary <- function(x, variable, na.rm = FALSE, ...) {
+  # Summarise according to variables supplied in dots
+  # 
+  # variable = the variable to summarise
+  # ... = the categories to group the summary by
+  dots <- c(...)
+  
   x$data %>%
-    select(ind, decile, gender, var, final_balance) %>% 
-    spread(var, final_balance) %>% 
-    select(decile, gender, current, change) %>% 
-    mutate(difference = change - current) %>% 
-    group_by(decile, gender) %>% 
-    summarise(average = mean(difference), median = median(difference),
-              sd = sd(difference), min = min(difference), max = max(difference))
-}
-
-retirement_income_summary <- function(x) {
-  x %>%
-    select(ind, decile, gender, var, retirement_income) %>%
-    spread(var, retirement_income) %>%
-    select(decile, gender, current, change) %>%
+    select_("ind", .dots = dots, "var", variable) %>%
+    spread_("var", variable) %>%
+    select_(.dots = dots, "current", "change") %>%
     mutate(difference = change - current) %>%
-    group_by(decile, gender) %>%
-    summarise(average = mean(difference), median = median(difference),
-              sd = sd(difference), min = min(difference), max = max(difference))
+    group_by_(.dots = dots) %>%
+    summarise(average = mean(difference, na.rm = na.rm),
+              median = median(difference, na.rm = na.rm),
+              sd = sd(difference, na.rm = na.rm),
+              min = min(difference, na.rm = na.rm),
+              max = max(difference, na.rm = na.rm))
 }
-
-
-replacement_ratio_summary <- function(x) {
-  x %>%
-    select(ind, decile, gender, var, retirement_income) %>%
-    spread(var, retirement_income) %>%
-    select(decile, gender, current, change) %>%
-    mutate(difference = change - current) %>%
-    group_by(decile, gender) %>%
-    summarise(average = mean(difference), median = median(difference),
-              sd = sd(difference), min = min(difference), max = max(difference))
-}
-
 
