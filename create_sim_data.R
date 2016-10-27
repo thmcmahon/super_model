@@ -1,4 +1,5 @@
 library(dplyr)
+library(tidyr)
 library(markovchain)
 library(tibble)
 library(zoo)
@@ -6,15 +7,25 @@ library(zoo)
 tax <- ozTaxData::sample_13_14
 mc_list <- readRDS('data/mc_list.Rds')
 
+
+
 # Helper functions --------------------
 
 range_to_value <- function(range, delimiter) {
-  # Randomly choose a value between a text range split by a delimiter
-  rng <- unlist(strsplit(range, split = delimiter))
-  min <- rng[1]
-  max <- rng[2]
-  x <- sample(min:max, 1)
-  x
+  if (range != "2000_or_more") {
+    # Randomly choose a value between a text range split by a delimiter
+    rng <- unlist(strsplit(range, split = delimiter))
+    min <- rng[1]
+    max <- rng[2]
+    x <- sample(min:max, 1)
+    x
+  } else if (range == "2000_or_more") {
+    # This creates a distribution from the data for those w/ income > 2000
+    high_incomes <- tax$Sw_amt[tax$Sw_amt / 52 > 2000] / 52
+    x <- sample(high_incomes, 1)
+    x
+  }
+  
 }
 
 
@@ -25,8 +36,6 @@ range_to_income <- function(income_range) {
     income <- 0
   } else if (income_range == "Nil_income") {
     income <- 0
-  } else if (income_range == "2000_or_more") {
-    income <- 2107 # median income > 2000 in the tax data deflated to 2006
   } else {
     income <- range_to_value(income_range, "-")
   }
