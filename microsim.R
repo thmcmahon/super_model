@@ -56,6 +56,41 @@ add_balances <- function(base_file, r, sgc = .095, tax = .15, na.rm = FALSE,
 }
 
 
+add_final_balance <- function(df) {
+  # This adds final super balances to the base dataset once they've been
+  # calculated
+  last_non_na <- function(x) {
+    x[length(x[!is.na(x)])]
+  }
+  
+  output <- df %>%
+    select(starts_with("b")) %>%
+    apply(1, last_non_na) %>%
+    cbind(df, final_balance = .)
+  output
+}
+
+
+add_final_income <- function(df) {
+  # This adds final super balances to the base dataset once they've been
+  # calculated
+  fincome <- function(x) {
+    if (length(x[x > 0 & !is.na(x)]) == 0) {
+      0
+    } else {
+      x[length(x[!is.na(x) & x > 0])]
+    }
+  }
+  
+  output <- df %>%
+    select(starts_with("y")) %>%
+    apply(1, fincome) %>%
+    unlist %>%
+    cbind(df, final_income = .)
+  output
+}
+
+
 # Microsimulation code ---------------------------------------------------------
 
 base_file <- readRDS('data/sim_data.Rds')
@@ -85,6 +120,30 @@ microsim <- function(sgc_current = .095, sgc_change,
   
   x$data <- rbind(super_current, super_change)
   
+  # x$data$decile <- ntile(x$data$wages, 10)
+  # 
+  # x$data$ratio <- ifelse(x$data$final_income > 0,
+  #                        x$data$retirement_income / x$data$final_income,
+  #                        NA)
+  
+  x$data <- x$data %>%
+    select(ind, gender, wages, super_balance, age_range, imputed_age, # decile,
+           var, everything()) %>%
+    arrange(desc(ind))
+                    
+  x$data$decile <- ntile(x$data$wages, 10)
+  
+  x$data <- add_final_balance(x$data)
+  
+  x$data$retirement_income <- x$data$final_balance * .04
+  
+  x$data <- add_final_income(x$data)
+  
+  x$data$ratio <- ifelse(x$data$final_income > 0,
+                         x$data$retirement_income / x$data$final_income,
+                         NA
+                        )
+  
   x$parameters <- parameters
   
   x$metadata <- list(run_time = Sys.time())
@@ -112,7 +171,8 @@ plot.microsim <- function(x) {
   df$gender_var <- paste(df$gender, df$var, sep = "_")
   p <- df %>% ggplot(aes(y = value, x = year, colour = gender_var))
   p + geom_line() + 
-    facet_wrap(~age_range) + theme_bw() +
+    facet_wrap(~age_range, ncol = 5) + theme_bw() +
+    theme(legend.position = "bottom") +
     scale_y_continuous(labels = scales::dollar) +
     ggtitle(
       paste0(
@@ -123,8 +183,54 @@ plot.microsim <- function(x) {
 
 summary.microsim <- function(x) {
   x$data %>%
-    select(gender, age_range, var, starts_with("b")) %>%
+    select(gender, age_range, var, starts_with("b"), final_balance) %>%
     group_by(age_range, gender, var) %>%
     summarise_all(funs(mean(., na.rm = TRUE)))
 }
+
+
+decile_summary <- function(x) {
+  x$data %>% 
+    select(ind, decile, var, final_balance) %>%
+    spread(var, final_balance) %>%
+    select(decile, current, change) %>%
+    mutate(difference = change - current) %>%
+    group_by(decile) %>%
+    summarise(average = mean(difference), median = median(difference))
+}
+
+decile_gender_summary <- function(x) {
+  x$data %>%
+    select(ind, decile, gender, var, final_balance) %>% 
+    spread(var, final_balance) %>% 
+    select(decile, gender, current, change) %>% 
+    mutate(difference = change - current) %>% 
+    group_by(decile, gender) %>% 
+    summarise(average = mean(difference), median = median(difference),
+              sd = sd(difference), min = min(difference), max = max(difference))
+}
+
+retirement_income_summary <- function(x) {
+  x %>%
+    select(ind, decile, gender, var, retirement_income) %>%
+    spread(var, retirement_income) %>%
+    select(decile, gender, current, change) %>%
+    mutate(difference = change - current) %>%
+    group_by(decile, gender) %>%
+    summarise(average = mean(difference), median = median(difference),
+              sd = sd(difference), min = min(difference), max = max(difference))
+}
+
+
+replacement_ratio_summary <- function(x) {
+  x %>%
+    select(ind, decile, gender, var, retirement_income) %>%
+    spread(var, retirement_income) %>%
+    select(decile, gender, current, change) %>%
+    mutate(difference = change - current) %>%
+    group_by(decile, gender) %>%
+    summarise(average = mean(difference), median = median(difference),
+              sd = sd(difference), min = min(difference), max = max(difference))
+}
+
 
