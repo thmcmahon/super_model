@@ -122,7 +122,8 @@ prep_data <- function(tax_data) {
   tax$imputed_age <- sapply(tax$age_range, range_to_age)
   
   tax <- tax %>%
-    select(ind = Ind, gender = Gender, wages = Sw_amt,
+    select(ind = Ind, gender = Gender, wages = Sw_amt, 
+           partner_status = Partner_status,
            super_balance = MCS_Ttl_Acnt_Bal, age_range, imputed_age) %>%
     mutate(weekly_wage = as.integer(wages / 52))
   tax
@@ -160,13 +161,14 @@ create_final_dataset <- function(tax) {
   )
   fs_df <- plyr::ldply(future_states, rbind)
   merged <- cbind(tax, fs_df)
-  names(merged) <- c("ind", "gender", "wages", "super_balance", "age_range",
-                     "imputed_age", "w2013", "w2018", "w2023", "w2028",
-                     "w2033", "w2038", "w2043", "w2048", "w2053", "w2058")
+  names(merged) <- c("ind", "gender", "wages", "partner_status",
+                     "super_balance", "age_range", "imputed_age", "w2013",
+                     "w2018", "w2023", "w2028", "w2033", "w2038", "w2043",
+                     "w2048", "w2053", "w2058")
   merged
   merged <- add_annual_data(merged)
 }
 
 sim_data <- create_final_dataset(tax)
 
-saveRDS(sim_data, 'data/sim_data.Rds')
+saveRDS(sim_data, 'data/sim_data_partner.Rds')
