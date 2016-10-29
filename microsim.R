@@ -55,6 +55,61 @@ add_balances <- function(base_file, r, sgc = .095, tax = .15, na.rm = FALSE,
   balances
 }
 
+calc_pension <- function(income, partner_status = "single") {
+  # calculate weekly aged pension rates
+  max_single <- 877.1
+  max_couple <- 661.2
+  
+  inc_test_single <- 162
+  ince_test_couple <- 288
+  
+  taper_single <- .5
+  taper_couple <- .25
+  
+  
+  income <- income
+  
+  if (partner_status == "single") {
+    if (income > inc_test_single) {
+      pension <- max_single - (income - inc_test_single) * taper_single
+    } else {
+      pension <- max_single
+    }
+  }
+  pension
+}
+
+
+calc_pension <- function(income, partner_status = "single") {
+  # Simple aged pension calculator that includes an income but no assets test
+  #
+  # Returns fortnightly pension amount
+  stopifnot(partner_status == "single" | partner_status == "couple")
+  
+  # lookup table for values
+  params <- tribble(
+    ~partner_status, ~max, ~inc_test, ~taper,
+    "single", 877.1, 162, .5,
+    "couple", 661.2, 288, .25
+  )
+  
+  # set relevant parameters from the lookup table
+  max <- params[params$partner_status == partner_status,][['max']]
+  inc_test <- params[params$partner_status == partner_status,][['inc_test']] 
+  taper <- params[params$partner_status == partner_status,][['taper']] 
+  
+  # if income is greater than the max income_test then taper the benefit
+  if (income > max) {
+    pension <- max - (income - inc_test) * taper
+  } else {
+    pension <- max
+  }
+  
+  # You can't get a negative pension
+  ifelse(pension > 0, pension, 0)
+}
+
+
 
 add_final_balance <- function(df) {
   # This adds final super balances to the base dataset once they've been
@@ -93,7 +148,7 @@ add_final_income <- function(df) {
 
 # Microsimulation code ---------------------------------------------------------
 
-base_file <- readRDS('data/sim_data.Rds')
+base_file <- readRDS('data/sim_data_partner.Rds')
 
 microsim <- function(sgc_current = .095, sgc_change,
                      tax_current = .15, tax_change = .15,
